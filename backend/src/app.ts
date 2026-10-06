@@ -1,11 +1,13 @@
 import express from 'express';
 import { pool } from './db';
 import { authRouter } from './routes/auth';
+import { meRouter } from './routes/me';
 
 export const app = express();
 
 app.use(express.json());
 app.use('/auth', authRouter);
+app.use('/me', meRouter);
 
 app.get('/health', async (_req, res) => {
   try {
