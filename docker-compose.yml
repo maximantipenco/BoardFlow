@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: boardflow-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: boardflow
+      POSTGRES_PASSWORD: boardflow
+      POSTGRES_DB: boardflow
+    ports:
+      - '5432:5432'
+    volumes:
+      - boardflow-data:/var/lib/postgresql/data
+
+volumes:
+  boardflow-data:
