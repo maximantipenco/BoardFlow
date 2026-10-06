@@ -1,15 +1,8 @@
 import 'dotenv/config';
-import { Pool } from 'pg';
+import { app } from './app';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const port = Number(process.env.PORT) || 3000;
 
-async function main() {
-  const result = await pool.query('SELECT now() AS time');
-  console.log('Connected to database at', result.rows[0].time);
-  await pool.end();
-}
-
-main().catch((err) => {
-  console.error('Database connection failed:', err.message);
-  process.exit(1);
+app.listen(port, () => {
+  console.log(`BoardFlow backend listening on http://localhost:${port}`);
 });
