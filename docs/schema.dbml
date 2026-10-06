@@ -9,22 +9,36 @@ Table users {
 Table boards {
   id integer [pk, increment]
   title varchar [not null]
-  owner_id integer [not null, ref: > users.id]
+  owner_id integer [not null]
   created_at timestamp [default: `now()`]
 }
 
 Table columns {
   id integer [pk, increment]
-  board_id integer [not null, ref: > boards.id]
+  board_id integer [not null]
   title varchar [not null]
   position integer [not null]
 }
 
 Table cards {
   id integer [pk, increment]
-  column_id integer [not null, ref: > columns.id]
+  column_id integer [not null]
   title varchar [not null]
   description text
   position integer [not null]
   created_at timestamp [default: `now()`]
 }
+
+Table comments {
+  id integer [pk, increment]
+  card_id integer [not null]
+  author_id integer [not null]
+  text text [not null]
+  created_at timestamp [default: `now()`]
+}
+
+Ref: boards.owner_id > users.id [delete: cascade]
+Ref: columns.board_id > boards.id [delete: cascade]
+Ref: cards.column_id > columns.id [delete: cascade]
+Ref: comments.card_id > cards.id [delete: cascade]
+Ref: comments.author_id > users.id [delete: cascade]
