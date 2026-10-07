@@ -4,6 +4,7 @@ import { authRouter } from './routes/auth';
 import { meRouter } from './routes/me';
 import { boardsRouter } from './routes/boards';
 import { columnsRouter } from './routes/columns';
+import { cardsRouter } from './routes/cards';
 
 export const app = express();
 
@@ -12,6 +13,7 @@ app.use('/auth', authRouter);
 app.use('/me', meRouter);
 app.use('/boards', boardsRouter);
 app.use(columnsRouter);
+app.use(cardsRouter);
 
 app.get('/health', async (_req, res) => {
   try {
