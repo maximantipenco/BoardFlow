@@ -66,4 +66,39 @@ describe('boards', () => {
     const stillThere = await request(app).get(`/boards/${id}`).set('Authorization', aliceAuth);
     expect(stillThere.status).toBe(200);
   });
+
+  it('returns the full board with columns and cards', async () => {
+    const auth = await registerAndLogin(alice);
+    const board = await request(app)
+      .post('/boards')
+      .set('Authorization', auth)
+      .send({ title: 'Full' });
+    const col = await request(app)
+      .post(`/boards/${board.body.id}/columns`)
+      .set('Authorization', auth)
+      .send({ title: 'To Do' });
+    await request(app)
+      .post(`/columns/${col.body.id}/cards`)
+      .set('Authorization', auth)
+      .send({ title: 'Task' });
+
+    const res = await request(app).get(`/boards/${board.body.id}/full`).set('Authorization', auth);
+    expect(res.status).toBe(200);
+    expect(res.body.columns).toHaveLength(1);
+    expect(res.body.columns[0].cards[0].title).toBe('Task');
+  });
+
+  it('hides the full board from other users', async () => {
+    const aliceAuth = await registerAndLogin(alice);
+    const bobAuth = await registerAndLogin(bob);
+    const board = await request(app)
+      .post('/boards')
+      .set('Authorization', aliceAuth)
+      .send({ title: 'P' });
+
+    const res = await request(app)
+      .get(`/boards/${board.body.id}/full`)
+      .set('Authorization', bobAuth);
+    expect(res.status).toBe(404);
+  });
 });

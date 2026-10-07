@@ -113,3 +113,44 @@ boardsRouter.delete('/:id', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Full board: columns with their cards, in 3 queries
+boardsRouter.get('/:id/full', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid board id' });
+
+  try {
+    const board = await pool.query(
+      'SELECT id, title, owner_id, created_at FROM boards WHERE id = $1 AND owner_id = $2',
+      [id, req.userId],
+    );
+    if (board.rows.length === 0) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
+
+    const columns = await pool.query(
+      'SELECT id, board_id, title, position FROM columns WHERE board_id = $1 ORDER BY position, id',
+      [id],
+    );
+    const cards = await pool.query(
+      `SELECT cd.id, cd.column_id, cd.title, cd.description, cd.position, cd.created_at
+       FROM cards cd
+       JOIN columns c ON c.id = cd.column_id
+       WHERE c.board_id = $1
+       ORDER BY cd.position, cd.id`,
+      [id],
+    );
+
+    const result = {
+      ...board.rows[0],
+      columns: columns.rows.map((col) => ({
+        ...col,
+        cards: cards.rows.filter((card) => card.column_id === col.id),
+      })),
+    };
+    return res.json(result);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
