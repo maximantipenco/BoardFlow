@@ -3,6 +3,7 @@ import { pool } from './db';
 import { authRouter } from './routes/auth';
 import { meRouter } from './routes/me';
 import { boardsRouter } from './routes/boards';
+import { columnsRouter } from './routes/columns';
 
 export const app = express();
 
@@ -10,6 +11,7 @@ app.use(express.json());
 app.use('/auth', authRouter);
 app.use('/me', meRouter);
 app.use('/boards', boardsRouter);
+app.use(columnsRouter);
 
 app.get('/health', async (_req, res) => {
   try {

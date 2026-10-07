@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
+import { parseId } from '../utils';
 
 export const boardsRouter = Router();
 
@@ -10,11 +11,6 @@ boardsRouter.use(requireAuth);
 const boardSchema = z.object({
   title: z.string().trim().min(1).max(255),
 });
-
-function parseId(value: string): number | null {
-  const id = Number(value);
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
 
 boardsRouter.post('/', async (req, res) => {
   const parsed = boardSchema.safeParse(req.body);
