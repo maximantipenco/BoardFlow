@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { AuthProvider, useAuth } from './auth';
 import AuthPage from './pages/AuthPage';
 import BoardsPage from './pages/BoardsPage';
+import BoardPage from './pages/BoardPage';
 
 function Protected({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -44,6 +45,14 @@ export default function App() {
             element={
               <Protected>
                 <BoardsPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/boards/:id"
+            element={
+              <Protected>
+                <BoardPage />
               </Protected>
             }
           />
