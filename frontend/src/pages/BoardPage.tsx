@@ -237,88 +237,67 @@ export default function BoardPage() {
 
       {error && <p style={{ color: 'crimson' }}>{error}</p>}
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginTop: 16 }}>
-        {board.columns.map((col) => (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCorners}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
-          >
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginTop: 16 }}>
-              {board.columns.map((col) => (
-                <section
-                  key={col.id}
-                  style={{
-                    width: 280,
-                    flexShrink: 0,
-                    background: '#f1f2f4',
-                    borderRadius: 8,
-                    padding: 12,
-                    color: '#222',
-                  }}
-                >
-                  <header style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <strong>{col.title}</strong>
-                    <span style={{ display: 'flex', gap: 4 }}>
-                      <button onClick={() => renameColumn(col)}>Rename</button>
-                      <button onClick={() => deleteColumn(col)}>Delete</button>
-                    </span>
-                  </header>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginTop: 16 }}>
+          {board.columns.map((col) => (
+            <section
+              key={col.id}
+              style={{
+                width: 280,
+                flexShrink: 0,
+                background: '#f1f2f4',
+                borderRadius: 8,
+                padding: 12,
+                color: '#222',
+              }}
+            >
+              <header style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <strong>{col.title}</strong>
+                <span style={{ display: 'flex', gap: 4 }}>
+                  <button onClick={() => renameColumn(col)}>Rename</button>
+                  <button onClick={() => deleteColumn(col)}>Delete</button>
+                </span>
+              </header>
 
-                  <SortableContext
-                    items={col.cards.map((c) => `card-${c.id}`)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <ColumnDropZone columnId={col.id}>
-                      {col.cards.map((card) => (
-                        <CardItem
-                          key={card.id}
-                          card={card}
-                          onEdit={editCard}
-                          onDelete={deleteCard}
-                        />
-                      ))}
-                    </ColumnDropZone>
-                  </SortableContext>
-
-                  <AddCardForm onAdd={(title) => addCard(col, title)} />
-                </section>
-              ))}
-
-              <form
-                onSubmit={addColumn}
-                style={{ width: 280, flexShrink: 0, display: 'grid', gap: 8 }}
+              <SortableContext
+                items={col.cards.map((c) => `card-${c.id}`)}
+                strategy={verticalListSortingStrategy}
               >
-                <input
-                  placeholder="New column name"
-                  value={newColumn}
-                  onChange={(e) => setNewColumn(e.target.value)}
-                />
-                <button type="submit">Add column</button>
-              </form>
-            </div>
+                <ColumnDropZone columnId={col.id}>
+                  {col.cards.map((card) => (
+                    <CardItem key={card.id} card={card} onEdit={editCard} onDelete={deleteCard} />
+                  ))}
+                </ColumnDropZone>
+              </SortableContext>
 
-            <DragOverlay>
-              {activeCard ? (
-                <ul style={{ margin: 0, padding: 0 }}>
-                  <CardItem card={activeCard} onEdit={editCard} onDelete={deleteCard} overlay />
-                </ul>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        ))}
+              <AddCardForm onAdd={(title) => addCard(col, title)} />
+            </section>
+          ))}
 
-        <form onSubmit={addColumn} style={{ width: 280, flexShrink: 0, display: 'grid', gap: 8 }}>
-          <input
-            placeholder="New column name"
-            value={newColumn}
-            onChange={(e) => setNewColumn(e.target.value)}
-          />
-          <button type="submit">Add column</button>
-        </form>
-      </div>
+          <form onSubmit={addColumn} style={{ width: 280, flexShrink: 0, display: 'grid', gap: 8 }}>
+            <input
+              placeholder="New column name"
+              value={newColumn}
+              onChange={(e) => setNewColumn(e.target.value)}
+            />
+            <button type="submit">Add column</button>
+          </form>
+        </div>
+
+        <DragOverlay>
+          {activeCard ? (
+            <ul style={{ margin: 0, padding: 0 }}>
+              <CardItem card={activeCard} onEdit={editCard} onDelete={deleteCard} overlay />
+            </ul>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </main>
   );
 }
