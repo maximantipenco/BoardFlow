@@ -1,9 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import { AuthProvider, useAuth } from './auth';
 import AuthPage from './pages/AuthPage';
 import BoardsPage from './pages/BoardsPage';
 import BoardPage from './pages/BoardPage';
+import { AuthProvider } from './auth';
+import { useAuth } from './authContext';
 
 function Protected({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();

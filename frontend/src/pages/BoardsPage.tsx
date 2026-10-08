@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { useAuth } from '../auth';
+import { useAuth } from '../authContext';
 import type { Board } from '../types';
 
 export default function BoardsPage() {

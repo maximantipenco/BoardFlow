@@ -1,6 +1,20 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCorners,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { api } from '../api';
+import CardItem from '../components/CardItem';
+import ColumnDropZone from '../components/ColumnDropZone';
 import type { Card, Column, FullBoard } from '../types';
 
 export default function BoardPage() {
@@ -9,6 +23,101 @@ export default function BoardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [newColumn, setNewColumn] = useState('');
+
+  const [activeCard, setActiveCard] = useState<Card | null>(null);
+  const snapshot = useRef<Column[] | null>(null);
+
+  // Distance 5 lets simple clicks on buttons work without starting a drag
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  function findColumnOf(columns: Column[], dndId: string): Column | undefined {
+    if (dndId.startsWith('column-')) {
+      const colId = Number(dndId.slice('column-'.length));
+      return columns.find((c) => c.id === colId);
+    }
+    const cardId = Number(dndId.slice('card-'.length));
+    return columns.find((c) => c.cards.some((card) => card.id === cardId));
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    snapshot.current = board?.columns ?? null;
+    setActiveCard((event.active.data.current?.card as Card) ?? null);
+  }
+
+  // While dragging over another column, move the card there immediately
+  function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event;
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    updateColumns((cols) => {
+      const from = findColumnOf(cols, activeId);
+      const to = findColumnOf(cols, overId);
+      if (!from || !to || from.id === to.id) return cols;
+
+      const card = from.cards.find((c) => `card-${c.id}` === activeId)!;
+      const overIndex = to.cards.findIndex((c) => `card-${c.id}` === overId);
+      const insertAt = overIndex >= 0 ? overIndex : to.cards.length;
+
+      return cols.map((c) => {
+        if (c.id === from.id) return { ...c, cards: c.cards.filter((x) => x.id !== card.id) };
+        if (c.id === to.id) {
+          const cards = [...c.cards];
+          cards.splice(insertAt, 0, { ...card, column_id: to.id });
+          return { ...c, cards };
+        }
+        return c;
+      });
+    });
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveCard(null);
+    const activeId = String(active.id);
+
+    if (!over || !board) {
+      if (snapshot.current) updateColumns(() => snapshot.current!);
+      return;
+    }
+
+    // Work out the final order inside the (possibly new) column
+    let columns = board.columns;
+    const col = findColumnOf(columns, activeId);
+    if (!col) return;
+
+    const oldIndex = col.cards.findIndex((c) => `card-${c.id}` === activeId);
+    const overIndex = col.cards.findIndex((c) => `card-${c.id}` === String(over.id));
+    let position = oldIndex;
+
+    if (overIndex >= 0 && overIndex !== oldIndex) {
+      position = overIndex;
+      const cards = [...col.cards];
+      const [moved] = cards.splice(oldIndex, 1);
+      cards.splice(overIndex, 0, moved);
+      columns = columns.map((c) => (c.id === col.id ? { ...c, cards } : c));
+      updateColumns(() => columns);
+    }
+
+    const cardId = Number(activeId.slice('card-'.length));
+    const original = snapshot.current
+      ?.flatMap((c) => c.cards.map((card, index) => ({ card, index })))
+      .find((x) => x.card.id === cardId);
+    const unchanged = original && original.card.column_id === col.id && original.index === position;
+    if (unchanged) return;
+
+    try {
+      await api(`/cards/${cardId}/move`, {
+        method: 'PATCH',
+        body: JSON.stringify({ columnId: col.id, position }),
+      });
+    } catch (err) {
+      // Server refused: roll the screen back to how it was
+      if (snapshot.current) updateColumns(() => snapshot.current!);
+      fail(err);
+    }
+  }
 
   useEffect(() => {
     api<FullBoard>(`/boards/${id}/full`)
@@ -130,48 +239,75 @@ export default function BoardPage() {
 
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginTop: 16 }}>
         {board.columns.map((col) => (
-          <section
-            key={col.id}
-            style={{
-              width: 280,
-              flexShrink: 0,
-              background: '#f1f2f4',
-              borderRadius: 8,
-              padding: 12,
-              color: '#222',
-            }}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
           >
-            <header style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <strong>{col.title}</strong>
-              <span style={{ display: 'flex', gap: 4 }}>
-                <button onClick={() => renameColumn(col)}>Rename</button>
-                <button onClick={() => deleteColumn(col)}>Delete</button>
-              </span>
-            </header>
-
-            <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 8 }}>
-              {col.cards.map((card) => (
-                <li
-                  key={card.id}
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginTop: 16 }}>
+              {board.columns.map((col) => (
+                <section
+                  key={col.id}
                   style={{
-                    background: 'white',
-                    borderRadius: 6,
-                    padding: 8,
-                    boxShadow: '0 1px 2px #0003',
+                    width: 280,
+                    flexShrink: 0,
+                    background: '#f1f2f4',
+                    borderRadius: 8,
+                    padding: 12,
+                    color: '#222',
                   }}
                 >
-                  <div>{card.title}</div>
-                  {card.description && <small style={{ color: '#555' }}>{card.description}</small>}
-                  <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-                    <button onClick={() => editCard(card)}>Edit</button>
-                    <button onClick={() => deleteCard(card)}>Delete</button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  <header style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <strong>{col.title}</strong>
+                    <span style={{ display: 'flex', gap: 4 }}>
+                      <button onClick={() => renameColumn(col)}>Rename</button>
+                      <button onClick={() => deleteColumn(col)}>Delete</button>
+                    </span>
+                  </header>
 
-            <AddCardForm onAdd={(title) => addCard(col, title)} />
-          </section>
+                  <SortableContext
+                    items={col.cards.map((c) => `card-${c.id}`)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <ColumnDropZone columnId={col.id}>
+                      {col.cards.map((card) => (
+                        <CardItem
+                          key={card.id}
+                          card={card}
+                          onEdit={editCard}
+                          onDelete={deleteCard}
+                        />
+                      ))}
+                    </ColumnDropZone>
+                  </SortableContext>
+
+                  <AddCardForm onAdd={(title) => addCard(col, title)} />
+                </section>
+              ))}
+
+              <form
+                onSubmit={addColumn}
+                style={{ width: 280, flexShrink: 0, display: 'grid', gap: 8 }}
+              >
+                <input
+                  placeholder="New column name"
+                  value={newColumn}
+                  onChange={(e) => setNewColumn(e.target.value)}
+                />
+                <button type="submit">Add column</button>
+              </form>
+            </div>
+
+            <DragOverlay>
+              {activeCard ? (
+                <ul style={{ margin: 0, padding: 0 }}>
+                  <CardItem card={activeCard} onEdit={editCard} onDelete={deleteCard} overlay />
+                </ul>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         ))}
 
         <form onSubmit={addColumn} style={{ width: 280, flexShrink: 0, display: 'grid', gap: 8 }}>
