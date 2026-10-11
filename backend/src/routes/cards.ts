@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { authorizeCard, authorizeColumn } from '../access';
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { parseId } from '../utils';
@@ -25,7 +26,6 @@ const moveSchema = z.object({
   position: z.number().int().min(0),
 });
 
-// Create a card at the end of a column
 cardsRouter.post('/columns/:columnId/cards', requireAuth, async (req, res) => {
   const columnId = parseId(req.params.columnId);
   if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
@@ -36,15 +36,8 @@ cardsRouter.post('/columns/:columnId/cards', requireAuth, async (req, res) => {
   }
 
   try {
-    const column = await pool.query(
-      `SELECT c.id FROM columns c
-       JOIN boards b ON b.id = c.board_id
-       WHERE c.id = $1 AND b.owner_id = $2`,
-      [columnId, req.userId],
-    );
-    if (column.rows.length === 0) {
-      return res.status(404).json({ error: 'Column not found' });
-    }
+    const boardId = await authorizeColumn(res, columnId, req.userId as number, 'editor');
+    if (!boardId) return;
 
     const result = await pool.query(
       `INSERT INTO cards (column_id, title, description, position)
@@ -60,21 +53,13 @@ cardsRouter.post('/columns/:columnId/cards', requireAuth, async (req, res) => {
   }
 });
 
-// List cards of a column
 cardsRouter.get('/columns/:columnId/cards', requireAuth, async (req, res) => {
   const columnId = parseId(req.params.columnId);
   if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
 
   try {
-    const column = await pool.query(
-      `SELECT c.id FROM columns c
-       JOIN boards b ON b.id = c.board_id
-       WHERE c.id = $1 AND b.owner_id = $2`,
-      [columnId, req.userId],
-    );
-    if (column.rows.length === 0) {
-      return res.status(404).json({ error: 'Column not found' });
-    }
+    const boardId = await authorizeColumn(res, columnId, req.userId as number, 'viewer');
+    if (!boardId) return;
 
     const result = await pool.query(
       `SELECT id, column_id, title, description, position, created_at
@@ -89,7 +74,6 @@ cardsRouter.get('/columns/:columnId/cards', requireAuth, async (req, res) => {
   }
 });
 
-// Update title and/or description
 cardsRouter.patch('/cards/:id', requireAuth, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Invalid card id' });
@@ -102,18 +86,17 @@ cardsRouter.patch('/cards/:id', requireAuth, async (req, res) => {
   const { title, description } = parsed.data;
 
   try {
+    const boardId = await authorizeCard(res, id, req.userId as number, 'editor');
+    if (!boardId) return;
+
     const result = await pool.query(
-      `UPDATE cards cd SET
-         title = COALESCE($1::text, cd.title),
-         description = CASE WHEN $2::boolean THEN $3::text ELSE cd.description END
-       FROM columns c, boards b
-       WHERE cd.id = $4 AND c.id = cd.column_id AND b.id = c.board_id AND b.owner_id = $5
-       RETURNING cd.id, cd.column_id, cd.title, cd.description, cd.position, cd.created_at`,
-      [title ?? null, description !== undefined, description ?? null, id, req.userId],
+      `UPDATE cards SET
+         title = COALESCE($1::text, title),
+         description = CASE WHEN $2::boolean THEN $3::text ELSE description END
+       WHERE id = $4
+       RETURNING id, column_id, title, description, position, created_at`,
+      [title ?? null, description !== undefined, description ?? null, id],
     );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Card not found' });
-    }
     return res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -121,7 +104,6 @@ cardsRouter.patch('/cards/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Move a card to another column and/or position
 cardsRouter.patch('/cards/:id/move', requireAuth, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Invalid card id' });
@@ -132,23 +114,15 @@ cardsRouter.patch('/cards/:id/move', requireAuth, async (req, res) => {
   }
   const { columnId: targetColumnId, position } = parsed.data;
 
+  const boardId = await authorizeCard(res, id, req.userId as number, 'editor');
+  if (!boardId) return;
+
   const client = await pool.connect();
   try {
-    // The card must belong to the user
-    const card = await client.query(
-      `SELECT cd.column_id, c.board_id FROM cards cd
-       JOIN columns c ON c.id = cd.column_id
-       JOIN boards b ON b.id = c.board_id
-       WHERE cd.id = $1 AND b.owner_id = $2`,
-      [id, req.userId],
-    );
-    if (card.rows.length === 0) {
-      return res.status(404).json({ error: 'Card not found' });
-    }
-    const sourceColumnId: number = card.rows[0].column_id;
-    const boardId: number = card.rows[0].board_id;
+    const sourceRow = await client.query('SELECT column_id FROM cards WHERE id = $1', [id]);
+    const sourceColumnId: number = sourceRow.rows[0].column_id;
 
-    // The target column must be on the same board (and so also the user's)
+    // The target column must be on the same board
     const target = await client.query('SELECT id FROM columns WHERE id = $1 AND board_id = $2', [
       targetColumnId,
       boardId,
@@ -158,7 +132,6 @@ cardsRouter.patch('/cards/:id/move', requireAuth, async (req, res) => {
     }
 
     await client.query('BEGIN');
-    // Lock the board so concurrent moves don't mix up positions
     await client.query('SELECT id FROM boards WHERE id = $1 FOR UPDATE', [boardId]);
 
     const sourceIds: number[] = (
@@ -180,7 +153,6 @@ cardsRouter.patch('/cards/:id/move', requireAuth, async (req, res) => {
     }
     targetIds.splice(Math.min(position, targetIds.length), 0, id);
 
-    // Renumber the source column (if different) and the target column
     if (targetColumnId !== sourceColumnId) {
       for (let i = 0; i < sourceIds.length; i++) {
         await client.query('UPDATE cards SET position = $1 WHERE id = $2', [i, sourceIds[i]]);
@@ -210,21 +182,15 @@ cardsRouter.patch('/cards/:id/move', requireAuth, async (req, res) => {
   }
 });
 
-// Delete a card
 cardsRouter.delete('/cards/:id', requireAuth, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Invalid card id' });
 
   try {
-    const result = await pool.query(
-      `DELETE FROM cards cd
-       USING columns c, boards b
-       WHERE cd.id = $1 AND c.id = cd.column_id AND b.id = c.board_id AND b.owner_id = $2`,
-      [id, req.userId],
-    );
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Card not found' });
-    }
+    const boardId = await authorizeCard(res, id, req.userId as number, 'editor');
+    if (!boardId) return;
+
+    await pool.query('DELETE FROM cards WHERE id = $1', [id]);
     return res.status(204).send();
   } catch (err) {
     console.error(err);

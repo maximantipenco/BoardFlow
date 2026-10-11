@@ -120,4 +120,44 @@ describe('members', () => {
     const after = await request(app).get(`/boards/${board.body.id}`).set('Authorization', b.auth);
     expect(after.status).toBe(404);
   });
+
+  it('lets an editor change cards but not a viewer', async () => {
+    const a = await registerAndLogin(alice);
+    const b = await registerAndLogin(bob);
+    const board = await request(app)
+      .post('/boards')
+      .set('Authorization', a.auth)
+      .send({ title: 'Shared' });
+    const col = await request(app)
+      .post(`/boards/${board.body.id}/columns`)
+      .set('Authorization', a.auth)
+      .send({ title: 'To Do' });
+    const url = `/boards/${board.body.id}/members`;
+
+    // Bob is a viewer: can read, cannot write
+    await request(app)
+      .post(url)
+      .set('Authorization', a.auth)
+      .send({ email: bob.email, role: 'viewer' });
+    const read = await request(app)
+      .get(`/columns/${col.body.id}/cards`)
+      .set('Authorization', b.auth);
+    expect(read.status).toBe(200);
+    const denied = await request(app)
+      .post(`/columns/${col.body.id}/cards`)
+      .set('Authorization', b.auth)
+      .send({ title: 'Nope' });
+    expect(denied.status).toBe(403);
+
+    // Promote Bob to editor: now he can write
+    await request(app)
+      .patch(`${url}/${b.id}`)
+      .set('Authorization', a.auth)
+      .send({ role: 'editor' });
+    const allowed = await request(app)
+      .post(`/columns/${col.body.id}/cards`)
+      .set('Authorization', b.auth)
+      .send({ title: 'Yes' });
+    expect(allowed.status).toBe(201);
+  });
 });

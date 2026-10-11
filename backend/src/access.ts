@@ -49,3 +49,35 @@ export async function authorizeBoard(
   }
   return role;
 }
+
+// Same idea as authorizeBoard, but starting from a column or card id.
+// Returns the board id so callers can use it, or null if the response was already sent.
+export async function authorizeColumn(
+  res: Response,
+  columnId: number,
+  userId: number,
+  required: Role,
+): Promise<number | null> {
+  const boardId = await getColumnBoardId(columnId);
+  if (!boardId) {
+    res.status(404).json({ error: 'Column not found' });
+    return null;
+  }
+  const role = await authorizeBoard(res, boardId, userId, required);
+  return role ? boardId : null;
+}
+
+export async function authorizeCard(
+  res: Response,
+  cardId: number,
+  userId: number,
+  required: Role,
+): Promise<number | null> {
+  const boardId = await getCardBoardId(cardId);
+  if (!boardId) {
+    res.status(404).json({ error: 'Card not found' });
+    return null;
+  }
+  const role = await authorizeBoard(res, boardId, userId, required);
+  return role ? boardId : null;
+}
