@@ -4,6 +4,7 @@ import { authorizeCard, authorizeColumn } from '../access';
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { parseId } from '../utils';
+import { notifyBoard } from '../realtime';
 
 export const cardsRouter = Router();
 
@@ -46,6 +47,7 @@ cardsRouter.post('/columns/:columnId/cards', requireAuth, async (req, res) => {
        RETURNING id, column_id, title, description, position, created_at`,
       [columnId, parsed.data.title, parsed.data.description ?? null],
     );
+    notifyBoard(boardId);
     return res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -97,6 +99,7 @@ cardsRouter.patch('/cards/:id', requireAuth, async (req, res) => {
        RETURNING id, column_id, title, description, position, created_at`,
       [title ?? null, description !== undefined, description ?? null, id],
     );
+    notifyBoard(boardId);
     return res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -166,6 +169,7 @@ cardsRouter.patch('/cards/:id/move', requireAuth, async (req, res) => {
       ]);
     }
     await client.query('COMMIT');
+    notifyBoard(boardId);
 
     const result = await client.query(
       `SELECT id, column_id, title, description, position, created_at
@@ -191,6 +195,7 @@ cardsRouter.delete('/cards/:id', requireAuth, async (req, res) => {
     if (!boardId) return;
 
     await pool.query('DELETE FROM cards WHERE id = $1', [id]);
+    notifyBoard(boardId);
     return res.status(204).send();
   } catch (err) {
     console.error(err);

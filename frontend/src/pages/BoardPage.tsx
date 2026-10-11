@@ -17,6 +17,8 @@ import CardItem from '../components/CardItem';
 import ColumnDropZone from '../components/ColumnDropZone';
 import type { Card, Column, FullBoard } from '../types';
 import MembersPanel from '../components/MembersPanel';
+import { io } from 'socket.io-client';
+import { getToken } from '../api';
 
 export default function BoardPage() {
   const { id } = useParams();
@@ -126,6 +128,21 @@ export default function BoardPage() {
       .then(setBoard)
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    const socket = io({ auth: { token: getToken() } });
+    const reload = () => {
+      api<FullBoard>(`/boards/${id}/full`)
+        .then(setBoard)
+        .catch(() => undefined);
+    };
+    socket.on('connect', () => socket.emit('board:join', Number(id)));
+    socket.on('board:changed', reload);
+    return () => {
+      socket.emit('board:leave', Number(id));
+      socket.disconnect();
+    };
   }, [id]);
 
   function fail(err: unknown) {

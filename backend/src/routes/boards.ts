@@ -4,6 +4,7 @@ import { authorizeBoard } from '../access';
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { parseId } from '../utils';
+import { notifyBoard } from '../realtime';
 
 export const boardsRouter = Router();
 
@@ -149,6 +150,7 @@ boardsRouter.patch('/:id', async (req, res) => {
        RETURNING id, title, owner_id, created_at`,
       [parsed.data.title, id],
     );
+    notifyBoard(id);
     return res.json({ ...result.rows[0], role });
   } catch (err) {
     console.error(err);
@@ -230,6 +232,7 @@ boardsRouter.post('/:id/members', async (req, res) => {
       return res.status(409).json({ error: 'User is already a member' });
     }
 
+    notifyBoard(id);
     return res
       .status(201)
       .json({ user_id: user.rows[0].id, ...user.rows[0], role: parsed.data.role });
@@ -263,6 +266,7 @@ boardsRouter.patch('/:id/members/:userId', async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Member not found' });
     }
+    notifyBoard(id);
     return res.json(result.rows[0]);
   } catch (err) {
     console.error(err);

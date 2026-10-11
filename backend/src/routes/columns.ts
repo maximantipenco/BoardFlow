@@ -4,6 +4,7 @@ import { authorizeBoard, authorizeColumn } from '../access';
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { parseId } from '../utils';
+import { notifyBoard } from '../realtime';
 
 export const columnsRouter = Router();
 
@@ -35,6 +36,7 @@ columnsRouter.post('/boards/:boardId/columns', requireAuth, async (req, res) => 
        RETURNING id, board_id, title, position`,
       [boardId, parsed.data.title],
     );
+    notifyBoard(boardId);
     return res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -81,6 +83,7 @@ columnsRouter.patch('/columns/:id', requireAuth, async (req, res) => {
        RETURNING id, board_id, title, position`,
       [parsed.data.title, id],
     );
+    notifyBoard(boardId);
     return res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -120,6 +123,7 @@ columnsRouter.patch('/columns/:id/move', requireAuth, async (req, res) => {
       await client.query('UPDATE columns SET position = $1 WHERE id = $2', [i, ids[i]]);
     }
     await client.query('COMMIT');
+    notifyBoard(boardId);
 
     const result = await client.query(
       'SELECT id, board_id, title, position FROM columns WHERE board_id = $1 ORDER BY position',
@@ -144,6 +148,7 @@ columnsRouter.delete('/columns/:id', requireAuth, async (req, res) => {
     if (!boardId) return;
 
     await pool.query('DELETE FROM columns WHERE id = $1', [id]);
+    notifyBoard(boardId);
     return res.status(204).send();
   } catch (err) {
     console.error(err);
