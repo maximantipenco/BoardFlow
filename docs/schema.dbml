@@ -37,6 +37,18 @@ Table comments {
   created_at timestamp [default: `now()`]
 }
 
+Table board_members {
+  board_id integer [not null]
+  user_id integer [not null]
+  role varchar [not null, note: 'owner | editor | viewer']
+  created_at timestamp [default: `now()`]
+  indexes {
+    (board_id, user_id) [pk]
+  }
+}
+
+Ref: board_members.board_id > boards.id [delete: cascade]
+Ref: board_members.user_id > users.id [delete: cascade]
 Ref: boards.owner_id > users.id [delete: cascade]
 Ref: columns.board_id > boards.id [delete: cascade]
 Ref: cards.column_id > columns.id [delete: cascade]
