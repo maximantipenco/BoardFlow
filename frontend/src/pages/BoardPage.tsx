@@ -16,6 +16,7 @@ import { api } from '../api';
 import CardItem from '../components/CardItem';
 import ColumnDropZone from '../components/ColumnDropZone';
 import type { Card, Column, FullBoard } from '../types';
+import MembersPanel from '../components/MembersPanel';
 
 export default function BoardPage() {
   const { id } = useParams();
@@ -23,6 +24,7 @@ export default function BoardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [newColumn, setNewColumn] = useState('');
+  const [showMembers, setShowMembers] = useState(false);
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const snapshot = useRef<Column[] | null>(null);
@@ -228,11 +230,16 @@ export default function BoardPage() {
     );
   }
 
+  const canEdit = board.role === 'owner' || board.role === 'editor';
+  const isOwner = board.role === 'owner';
+
   return (
     <main style={{ padding: 16 }}>
       <header style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         <Link to="/">&larr; Boards</Link>
         <h1 style={{ margin: 0 }}>{board.title}</h1>
+        <button onClick={() => setShowMembers(true)}>Share</button>
+        <small>({board.role})</small>
       </header>
 
       {error && <p style={{ color: 'crimson' }}>{error}</p>}
@@ -259,10 +266,12 @@ export default function BoardPage() {
             >
               <header style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <strong>{col.title}</strong>
-                <span style={{ display: 'flex', gap: 4 }}>
-                  <button onClick={() => renameColumn(col)}>Rename</button>
-                  <button onClick={() => deleteColumn(col)}>Delete</button>
-                </span>
+                {canEdit && (
+                  <span style={{ display: 'flex', gap: 4 }}>
+                    <button onClick={() => renameColumn(col)}>Rename</button>
+                    <button onClick={() => deleteColumn(col)}>Delete</button>
+                  </span>
+                )}
               </header>
 
               <SortableContext
@@ -271,33 +280,53 @@ export default function BoardPage() {
               >
                 <ColumnDropZone columnId={col.id}>
                   {col.cards.map((card) => (
-                    <CardItem key={card.id} card={card} onEdit={editCard} onDelete={deleteCard} />
+                    <CardItem
+                      key={card.id}
+                      card={card}
+                      onEdit={editCard}
+                      onDelete={deleteCard}
+                      canEdit={canEdit}
+                    />
                   ))}
                 </ColumnDropZone>
               </SortableContext>
 
-              <AddCardForm onAdd={(title) => addCard(col, title)} />
+              {canEdit && <AddCardForm onAdd={(title) => addCard(col, title)} />}
             </section>
           ))}
 
-          <form onSubmit={addColumn} style={{ width: 280, flexShrink: 0, display: 'grid', gap: 8 }}>
-            <input
-              placeholder="New column name"
-              value={newColumn}
-              onChange={(e) => setNewColumn(e.target.value)}
-            />
-            <button type="submit">Add column</button>
-          </form>
+          {canEdit && (
+            <form
+              onSubmit={addColumn}
+              style={{ width: 280, flexShrink: 0, display: 'grid', gap: 8 }}
+            >
+              <input
+                placeholder="New column name"
+                value={newColumn}
+                onChange={(e) => setNewColumn(e.target.value)}
+              />
+              <button type="submit">Add column</button>
+            </form>
+          )}
         </div>
 
         <DragOverlay>
           {activeCard ? (
             <ul style={{ margin: 0, padding: 0 }}>
-              <CardItem card={activeCard} onEdit={editCard} onDelete={deleteCard} overlay />
+              <CardItem
+                card={activeCard}
+                onEdit={editCard}
+                onDelete={deleteCard}
+                canEdit={canEdit}
+                overlay
+              />
             </ul>
           ) : null}
         </DragOverlay>
       </DndContext>
+      {showMembers && (
+        <MembersPanel boardId={board.id} isOwner={isOwner} onClose={() => setShowMembers(false)} />
+      )}
     </main>
   );
 }

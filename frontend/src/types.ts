@@ -1,8 +1,18 @@
+export type Role = 'owner' | 'editor' | 'viewer';
+
+export type Member = {
+  user_id: number;
+  email: string;
+  name: string | null;
+  role: Role;
+};
+
 export type Board = {
   id: number;
   title: string;
   owner_id: number;
   created_at: string;
+  role?: Role;
 };
 
 export type Card = {

@@ -6,13 +6,15 @@ type Props = {
   card: Card;
   onEdit: (card: Card) => void;
   onDelete: (card: Card) => void;
+  canEdit: boolean;
   overlay?: boolean;
 };
 
-export default function CardItem({ card, onEdit, onDelete, overlay }: Props) {
+export default function CardItem({ card, onEdit, onDelete, canEdit, overlay }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `card-${card.id}`,
     data: { type: 'card', card },
+    disabled: !canEdit,
   });
 
   return (
@@ -33,10 +35,12 @@ export default function CardItem({ card, onEdit, onDelete, overlay }: Props) {
         <div>{card.title}</div>
         {card.description && <small style={{ color: '#555' }}>{card.description}</small>}
       </div>
-      <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-        <button onClick={() => onEdit(card)}>Edit</button>
-        <button onClick={() => onDelete(card)}>Delete</button>
-      </div>
+      {canEdit && (
+        <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+          <button onClick={() => onEdit(card)}>Edit</button>
+          <button onClick={() => onDelete(card)}>Delete</button>
+        </div>
+      )}
     </li>
   );
 }
